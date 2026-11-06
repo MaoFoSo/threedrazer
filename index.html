@@ -18,6 +18,7 @@
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#9cc8ef;font-family:system-ui,-apple-system,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
   canvas{display:block}
+  #game{position:fixed;left:0;top:0;width:100vw;height:100vh;height:100lvh}
   .hide{display:none!important}
   #hud{position:fixed;top:calc(10px + env(safe-area-inset-top));left:calc(12px + env(safe-area-inset-left));right:calc(12px + env(safe-area-inset-right));color:#fff;font-weight:800;text-shadow:0 2px 5px #000a;pointer-events:none}
   #progWrap{background:#0005;border-radius:10px;padding:6px 10px}
@@ -158,12 +159,21 @@ scene.fog = new THREE.Fog(new THREE.Color(0xd3e1ef).convertSRGBToLinear(), 110, 
 const camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.1, 600);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.setSize(innerWidth, innerHeight);
+renderer.domElement.id = 'game';
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.prepend(renderer.domElement);
-addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+// Canvas füllt per CSS den großen Viewport (100lvh), auch unter der Safari/Chrome-Leiste am iPhone.
+function fitRenderer() {
+  const c = renderer.domElement, w = c.clientWidth || innerWidth, h = c.clientHeight || innerHeight;
+  camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h, false);
+}
+fitRenderer();
+addEventListener('resize', fitRenderer);
+addEventListener('orientationchange', () => setTimeout(fitRenderer, 300));
+if (window.visualViewport) visualViewport.addEventListener('resize', fitRenderer);
+if (window.ResizeObserver) new ResizeObserver(fitRenderer).observe(renderer.domElement);
 const sun = new THREE.DirectionalLight(0xfff4e6, 1.35); sun.position.set(40, 100, -30); scene.add(sun); scene.add(sun.target);
 sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
 { const sc = sun.shadow.camera; sc.left = -6; sc.right = 6; sc.top = 6; sc.bottom = -6; sc.near = 50; sc.far = 180; }
