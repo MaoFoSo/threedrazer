@@ -64,7 +64,7 @@
 <div id="flash"></div>
 <div id="msg"></div>
 <button id="pauseBtn" class="hide" aria-label="Pause">❚❚</button>
-<div id="pause" class="hide"><div class="t">Pause</div><button id="resumeBtn">▶ Weiter</button><small>P / Esc zum Fortsetzen</small></div>
+<div id="pause" class="hide"><div class="t">Pause</div><button id="resumeBtn">▶ Weiter</button><small>P / Esc zum Fortsetzen · M Ton an/aus</small></div>
 <div id="loading" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#cfe0f0;color:#1d3557;font:800 22px system-ui,sans-serif;z-index:9">Strecke wird gebaut …</div>
 <div class="ctrl hide" id="ctrlL"><button data-k="left">◀</button><button data-k="right">▶</button></div>
 <div class="ctrl hide" id="ctrlR"><button data-k="down">⏬</button><button data-k="up">⏫</button></div>
@@ -1240,6 +1240,7 @@ const keys = { up: false, down: false, left: false, right: false };
 const km = { ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right' };
 addEventListener('keydown', e => {
   if (e.code === 'KeyP' || e.code === 'Escape') { e.preventDefault(); if (!e.repeat) setPause(!paused); return; }
+  if (e.code === 'KeyM') { if (!e.repeat) toggleMute(); return; }
   if (km[e.code]) { e.preventDefault(); if (!paused) keys[km[e.code]] = true; }
 });
 addEventListener('keyup', e => { if (km[e.code]) keys[km[e.code]] = false; });
@@ -1260,6 +1261,40 @@ function setPause(p) {
 $('pauseBtn').addEventListener('pointerdown', e => { e.preventDefault(); setPause(true); });
 $('resumeBtn').addEventListener('click', () => setPause(false));
 document.addEventListener('visibilitychange', () => { if (document.hidden) setPause(true); });
+
+// ---------- Motorsound (Web Audio, synthetisch) ----------
+let ac = null, eng = null, muted = false;
+try { muted = localStorage.getItem('schrottracer_mute') === '1'; } catch (e) {}
+function initAudio() {   // Browser erlauben Audio erst nach einer Nutzeraktion
+  if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  ac = new AC();
+  const out = ac.createGain(); out.gain.value = 0; out.connect(ac.destination);
+  const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 300; lp.Q.value = 3; lp.connect(out);
+  const o1 = ac.createOscillator(); o1.type = 'sawtooth'; o1.connect(lp);
+  const o2 = ac.createOscillator(); o2.type = 'square';
+  const g2 = ac.createGain(); g2.gain.value = 0.5; o2.connect(g2); g2.connect(lp);
+  o1.start(); o2.start();
+  eng = { out, lp, o1, o2 };
+}
+function engineSound() {
+  if (!eng) return;
+  const on = !paused && !muted && (state === 'run' || state === 'over');
+  const r = S ? Math.min(1, car.v / S.maxV) : 0;
+  const gas = state === 'run' && keys.up && car.fuel > 0;
+  const f = 38 + r * 110 + (gas ? 8 : 0), now = ac.currentTime;   // Drehzahl folgt dem Tempo
+  eng.o1.frequency.setTargetAtTime(f, now, 0.08);
+  eng.o2.frequency.setTargetAtTime(f * 0.5, now, 0.08);
+  eng.o2.detune.value = tier() === 0 ? 30 : 0;   // Schrottkiste klingt rauer
+  eng.lp.frequency.setTargetAtTime(250 + r * 900 + (gas ? 400 : 0), now, 0.1);
+  eng.out.gain.setTargetAtTime(on ? (gas ? 0.13 : 0.08) : 0, now, 0.12);
+}
+function toggleMute() {
+  muted = !muted; try { localStorage.setItem('schrottracer_mute', muted ? '1' : '0'); } catch (e) {}
+  showMsg(muted ? '🔇 Ton aus' : '🔊 Ton an', 0.8);
+}
+addEventListener('pointerdown', initAudio);
+addEventListener('keydown', initAudio);
 
 // ---------- Spiellogik ----------
 let state = 'garage';
@@ -1411,6 +1446,7 @@ let t = 0;
 function loop() {
   requestAnimationFrame(loop);
   const dt = Math.min(clock.getDelta(), 0.05);
+  engineSound();
   if (paused) { renderer.render(scene, camera); return; }   // eingefroren, Zeit läuft nicht weiter
   t += dt;
   if (state === 'run') update(dt);
