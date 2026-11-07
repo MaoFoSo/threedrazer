@@ -1,7 +1,7 @@
 // threedrazer – Service Worker für den Offline-Betrieb.
 // WICHTIG: Bei jeder Änderung an einer Datei des Spiels CACHE_VERSION hochzählen,
 // damit die neue Version beim nächsten Start auf den Geräten ankommt.
-const CACHE_VERSION = 3;
+const CACHE_VERSION = 4;
 const CACHE = 'threedrazer-v' + CACHE_VERSION;
 
 // Alle Pfade relativ zum Ort von sw.js (Spiel läuft unter /threedrazer/)
